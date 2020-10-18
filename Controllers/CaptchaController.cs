@@ -20,13 +20,24 @@ namespace Captcha.Controllers
             _capatchaService = capatchaService;
         }
 
-        
+
         [HttpGet]
         public async Task<ActionResult> Get()
         {
-            var generated = _capatchaService.Generate();
+            var (id, image) = await _capatchaService.GenerateRecordAsync();
 
-            return Ok(generated);
+            return Ok(new
+            {
+                Id = id,
+                Image = image
+            });
+        }
+
+        [HttpPost("{id}/Match/{text}")]
+        public async Task<ActionResult<bool>> Match(int id, string text)
+        {
+            var match = await _capatchaService.MatchRecord(id,text);
+            return Ok(match);
         }
     }
 }

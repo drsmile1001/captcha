@@ -2,6 +2,9 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Captcha
@@ -10,10 +13,12 @@ namespace Captcha
     {
         private Random _random = new Random(Guid.NewGuid().GetHashCode());
         private readonly CaptchaOptions _options;
+        private readonly CaptchaContext _context;
 
-        public CapatchaService(IOptions<CaptchaOptions> options)
+        public CapatchaService(IOptions<CaptchaOptions> options, CaptchaContext context)
         {
             _options = options.Value;
+            _context = context;
         }
 
         private float RandomFloat(float min, float max)
@@ -29,7 +34,7 @@ namespace Captcha
             return Color.FromArgb(r, g, b);
         }
 
-        public CapatchaGenerated Generate()
+        public (string Text, string Image) GenerateCapatchaImage()
         {
             using var bitmap = new Bitmap(_options.ImageWidth, _options.ImageHeight);
             using var graph = Graphics.FromImage(bitmap);
@@ -87,13 +92,43 @@ namespace Captcha
 
             using var ms = new MemoryStream();
 
-            bitmap.Save(ms,ImageFormat.Png);
+            bitmap.Save(ms, ImageFormat.Png);
             var image = Convert.ToBase64String(ms.ToArray());
-            return new CapatchaGenerated
+            return (text, image);
+        }
+
+        public async Task<(int id, string image)> GenerateRecordAsync()
+        {
+            var (text, image) = GenerateCapatchaImage();
+
+            var record = new CaptchaRecord
             {
-                Image = image,
-                Text = text
+                Text = text,
+                CreatedTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             };
+
+            _context.Records.Add(record);
+
+            await _context.SaveChangesAsync();
+            return (record.Id, image);
+        }
+
+        public async Task RemoveOldRecordsAsync()
+        {
+            var endTime = DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds();
+            _context.Records.RemoveRange(_context.Records.Where(record => record.CreatedTime < endTime));
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<bool> MatchRecord(int id, string text)
+        {
+            await RemoveOldRecordsAsync();
+            var found = await _context.Records
+                .SingleOrDefaultAsync(record => record.Id == id && record.Text == text);
+            if (found == null) return false;
+            _context.Records.Remove(found);
+            await _context.SaveChangesAsync();
+            return true;
         }
     }
 }

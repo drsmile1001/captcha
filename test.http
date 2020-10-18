@@ -1,0 +1,4 @@
+GET https://localhost:5001/api/Captcha
+###
+
+POST https://localhost:5001/api/Captcha/3/Match/8RBBK

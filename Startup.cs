@@ -6,10 +6,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace Captcha
 {
@@ -27,7 +27,13 @@ namespace Captcha
         {
             services.Configure<CaptchaOptions>(Configuration.GetSection("Captcha"));
             services.AddControllers();
+            services.AddDbContext<CaptchaContext>(options => options.UseSqlite("Data Source=captcha.db"));
             services.AddScoped<CapatchaService>();
+
+            using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            using var context = scope.ServiceProvider.GetRequiredService<CaptchaContext>();
+            context.Database.EnsureCreated();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
